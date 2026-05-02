@@ -37,10 +37,85 @@ const TIME_ROWS = [
   { time: "3:15-3:35", block: "Afternoon", period: "afternoon", unit: 4 },
 ];
 
+const DUTY_TARGET_MINUTES = 80;
+const DUTY_MAX_STAFF = 34;
+const DUTY_MIN_STAFF_FOR_COVERAGE = 6;
+
+const DUTY_GROUPS = [
+  {
+    time: "9:00-9:15",
+    label: "Morning",
+    duration: 15,
+    timeKey: "morning-arrival",
+    duties: ["Bus", "Kiss n ride", "Prim", "Jr", "Jr/int", "In"],
+  },
+  {
+    time: "10:55-11:15",
+    label: "NB outside",
+    duration: 20,
+    timeKey: "nb1-outside",
+    duties: ["Kinder", "Prim", "Prim field", "Jr field", "Int", "Int field"],
+  },
+  {
+    time: "11:15-11:35",
+    label: "NB halls",
+    duration: 20,
+    timeKey: "nb1-halls",
+    duties: ["Kinder", "Int hall", "Jr hall", "P hall"],
+  },
+  {
+    time: "1:15-1:35",
+    label: "NB outside",
+    duration: 20,
+    timeKey: "nb2-outside",
+    duties: ["Kinder", "Prim", "Prim field", "Jr field", "Int", "Int field"],
+  },
+  {
+    time: "1:35-1:55",
+    label: "NB halls",
+    duration: 20,
+    timeKey: "nb2-halls",
+    duties: ["Kinder", "Int hall", "Jr hall", "P hall"],
+  },
+  {
+    time: "3:35-3:40",
+    label: "Dismissal",
+    duration: 5,
+    timeKey: "dismissal",
+    duties: ["Prim playground", "Kiss n ride", "Front bus", "Mid bus", "Kinder"],
+  },
+  {
+    time: "3:35-3:50",
+    label: "Dismissal",
+    duration: 15,
+    timeKey: "dismissal",
+    duties: ["Back bus"],
+  },
+];
+
+const DUTY_ROWS = DUTY_GROUPS.flatMap((group) =>
+  group.duties.map((duty) => ({
+    time: group.time,
+    group: group.label,
+    duration: group.duration,
+    timeKey: group.timeKey,
+    duty,
+    baseKey: `${group.timeKey}:${duty}`,
+  })),
+);
+
+const DUTY_TOTAL_MINUTES =
+  DUTY_ROWS.reduce((total, row) => total + row.duration, 0) * DAYS.length;
+
 let scheduleBody;
 let totalsElement;
 let statusElement;
 let consistentToggle;
+let staffCountInput;
+let dutyConsistentToggle;
+let dutyBody;
+let dutyTotalsElement;
+let dutyStatusElement;
 
 if (typeof document !== "undefined") {
   initializePage();
@@ -50,6 +125,8 @@ if (typeof module !== "undefined") {
   module.exports = {
     generateSchedule,
     validateSchedule,
+    generateDutySchedule,
+    validateDutySchedule,
   };
 }
 
@@ -58,6 +135,11 @@ function initializePage() {
   totalsElement = document.querySelector("#totals");
   statusElement = document.querySelector("#status");
   consistentToggle = document.querySelector("#consistent-toggle");
+  staffCountInput = document.querySelector("#staff-count");
+  dutyConsistentToggle = document.querySelector("#duty-consistent-toggle");
+  dutyBody = document.querySelector("#duty-body");
+  dutyTotalsElement = document.querySelector("#duty-totals");
+  dutyStatusElement = document.querySelector("#duty-status");
 
   document.querySelector("#generate-button").addEventListener("click", () => {
     try {
@@ -80,8 +162,29 @@ function initializePage() {
     }
   });
 
+  document.querySelector("#generate-duty-button").addEventListener("click", () => {
+    try {
+      const staffCount = Number.parseInt(staffCountInput.value, 10);
+      const consistent = dutyConsistentToggle.checked;
+      const schedule = generateDutySchedule(staffCount, { consistent });
+      const validation = validateDutySchedule(schedule);
+
+      if (!validation.valid) {
+        throw new Error(validation.errors.join(" "));
+      }
+
+      renderDutySchedule(schedule);
+      renderDutyTotals(schedule.totals, schedule.staffNames);
+      dutyStatusElement.textContent = createDutyStatus(schedule, consistent);
+    } catch (error) {
+      dutyStatusElement.textContent = `Unable to generate a duty schedule: ${error.message}`;
+    }
+  });
+
   renderEmptyTable();
   renderTotals(Object.fromEntries(TEACHERS.map((teacher) => [teacher, 0])));
+  renderEmptyDutyTable();
+  dutyTotalsElement.innerHTML = "";
 }
 
 function generateSchedule(options = {}) {
@@ -212,6 +315,309 @@ function placeConsistentSegment(blocks) {
   }
 
   return slots;
+}
+
+function generateDutySchedule(staffCount, options = {}) {
+  const normalizedStaffCount = normalizeStaffCount(staffCount);
+
+  if (normalizedStaffCount < DUTY_MIN_STAFF_FOR_COVERAGE) {
+    throw new Error(
+      `at least ${DUTY_MIN_STAFF_FOR_COVERAGE} staff are required because six duties happen at the same time`,
+    );
+  }
+
+  let bestSchedule = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  const attempts = options.consistent ? 120 : 60;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const schedule = buildDutySchedule(normalizedStaffCount, options);
+    const validation = validateDutySchedule(schedule);
+
+    if (!validation.valid) {
+      continue;
+    }
+
+    const score = scoreDutySchedule(schedule, options);
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestSchedule = schedule;
+    }
+  }
+
+  if (bestSchedule === null) {
+    throw new Error("the duty solver exhausted its attempts");
+  }
+
+  improveDutyBalance(bestSchedule, options);
+
+  return bestSchedule;
+}
+
+function normalizeStaffCount(staffCount) {
+  if (!Number.isFinite(staffCount)) {
+    throw new Error("enter a valid staff count");
+  }
+
+  return Math.min(DUTY_MAX_STAFF, Math.max(1, Math.trunc(staffCount)));
+}
+
+function buildDutySchedule(staffCount, options) {
+  const staffNames = createStaffNames(staffCount);
+  const staffRecords = staffNames.map((name) => ({
+    name,
+    total: 0,
+    busy: new Set(),
+    baseCounts: new Map(),
+  }));
+  const rows = DUTY_ROWS.map((row) => ({
+    ...row,
+    assignments: Array.from({ length: DAYS.length }, () => null),
+  }));
+  const assignmentOrder = createDutyAssignmentOrder(rows, options.consistent);
+
+  assignmentOrder.forEach(({ rowIndex, dayIndex }) => {
+    const row = rows[rowIndex];
+    const staff = chooseDutyStaff(row, dayIndex, staffRecords, staffCount, options);
+
+    row.assignments[dayIndex] = staff.name;
+    staff.total += row.duration;
+    staff.busy.add(createBusyKey(dayIndex, row.timeKey));
+    staff.baseCounts.set(row.baseKey, (staff.baseCounts.get(row.baseKey) || 0) + 1);
+  });
+
+  const totals = Object.fromEntries(staffRecords.map((staff) => [staff.name, staff.total]));
+
+  return {
+    rows,
+    staffNames,
+    totals,
+    targetMinutes: DUTY_TARGET_MINUTES,
+    averageMinutes: DUTY_TOTAL_MINUTES / staffCount,
+    totalMinutes: DUTY_TOTAL_MINUTES,
+  };
+}
+
+function createDutyAssignmentOrder(rows, consistent) {
+  if (consistent) {
+    const rowOrder = rows
+      .map((row, rowIndex) => ({ row, rowIndex, tieBreak: Math.random() }))
+      .sort(
+        (left, right) =>
+          right.row.duration - left.row.duration || left.tieBreak - right.tieBreak,
+      );
+
+    return rowOrder.flatMap(({ rowIndex }) =>
+      shuffle(DAYS.map((day, dayIndex) => ({ rowIndex, dayIndex }))),
+    );
+  }
+
+  return shuffle(
+    rows.flatMap((row, rowIndex) =>
+      DAYS.map((day, dayIndex) => ({ rowIndex, dayIndex })),
+    ),
+  );
+}
+
+function chooseDutyStaff(row, dayIndex, staffRecords, staffCount, options) {
+  const balanceTarget = Math.max(DUTY_TARGET_MINUTES, DUTY_TOTAL_MINUTES / staffCount);
+  const candidates = staffRecords.filter(
+    (staff) => !staff.busy.has(createBusyKey(dayIndex, row.timeKey)),
+  );
+  const unusedStaffAvailable = candidates.some((staff) => staff.total === 0);
+  const hasConsistentCandidate = candidates.some((staff) => {
+    const baseCount = staff.baseCounts.get(row.baseKey) || 0;
+    return baseCount > 0 && staff.total + row.duration <= balanceTarget + 5;
+  });
+
+  if (candidates.length === 0) {
+    throw new Error(`no available staff for ${row.duty} on ${DAYS[dayIndex]}`);
+  }
+
+  return candidates
+    .map((staff) => ({
+      staff,
+      score: scoreDutyCandidate(staff, row, balanceTarget, options, {
+        unusedStaffAvailable,
+        hasConsistentCandidate,
+      }),
+    }))
+    .sort((left, right) => left.score - right.score)[0].staff;
+}
+
+function scoreDutyCandidate(staff, row, balanceTarget, options, context) {
+  const projectedTotal = staff.total + row.duration;
+  const underTarget = Math.max(0, balanceTarget - projectedTotal);
+  const overTarget = Math.max(0, projectedTotal - balanceTarget);
+  let score = underTarget + overTarget * 4 + staff.total * 0.05 + Math.random() * 0.4;
+
+  if (options.consistent) {
+    const baseCount = staff.baseCounts.get(row.baseKey) || 0;
+
+    if (context.unusedStaffAvailable && !context.hasConsistentCandidate) {
+      score += staff.total === 0 ? -90 : 50;
+    }
+
+    if (baseCount > 0 && projectedTotal <= balanceTarget + 5) {
+      score -= 28 + baseCount * 5;
+    }
+
+  }
+
+  if (balanceTarget <= DUTY_TARGET_MINUTES && projectedTotal > DUTY_TARGET_MINUTES) {
+    score += (projectedTotal - DUTY_TARGET_MINUTES) * 8;
+  }
+
+  return score;
+}
+
+function createBusyKey(dayIndex, timeKey) {
+  return `${dayIndex}:${timeKey}`;
+}
+
+function createStaffNames(staffCount) {
+  return Array.from({ length: staffCount }, (item, index) => `Staff ${index + 1}`);
+}
+
+function validateDutySchedule(schedule) {
+  const errors = [];
+  const staffSet = new Set(schedule.staffNames);
+  const totals = Object.fromEntries(schedule.staffNames.map((staff) => [staff, 0]));
+  const busy = new Map();
+
+  schedule.rows.forEach((row) => {
+    row.assignments.forEach((staff, dayIndex) => {
+      if (!staff) {
+        errors.push(`${row.duty} is unassigned on ${DAYS[dayIndex]}.`);
+        return;
+      }
+
+      if (!staffSet.has(staff)) {
+        errors.push(`${row.duty} has unknown staff ${staff} on ${DAYS[dayIndex]}.`);
+        return;
+      }
+
+      totals[staff] += row.duration;
+
+      const busyKey = createBusyKey(dayIndex, row.timeKey);
+      const staffAtTime = busy.get(busyKey) || new Set();
+
+      if (staffAtTime.has(staff)) {
+        errors.push(`${staff} has overlapping duties on ${DAYS[dayIndex]} at ${row.time}.`);
+      }
+
+      staffAtTime.add(staff);
+      busy.set(busyKey, staffAtTime);
+    });
+  });
+
+  schedule.staffNames.forEach((staff) => {
+    if (totals[staff] !== schedule.totals[staff]) {
+      errors.push(`${staff} total is inconsistent.`);
+    }
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    totals,
+  };
+}
+
+function scoreDutySchedule(schedule, options) {
+  const balanceTarget = Math.max(DUTY_TARGET_MINUTES, schedule.averageMinutes);
+  const totals = Object.values(schedule.totals);
+  const fairnessScore = totals.reduce(
+    (score, total) => score + Math.abs(total - balanceTarget),
+    0,
+  );
+  const overTargetScore =
+    schedule.averageMinutes <= DUTY_TARGET_MINUTES
+      ? totals.reduce((score, total) => score + Math.max(0, total - DUTY_TARGET_MINUTES) * 10, 0)
+      : 0;
+  const consistencyScore = options.consistent
+    ? schedule.rows.reduce((score, row) => score + new Set(row.assignments).size - 1, 0)
+    : 0;
+  const unusedStaffScore = totals.filter((total) => total === 0).length * 500;
+  const rangeScore = (Math.max(...totals) - Math.min(...totals)) * 3;
+
+  return fairnessScore + overTargetScore + consistencyScore * 8 + unusedStaffScore + rangeScore;
+}
+
+function improveDutyBalance(schedule, options) {
+  let improved = true;
+  let currentScore = scoreDutySchedule(schedule, options);
+
+  while (improved) {
+    improved = false;
+    const staffByTotal = [...schedule.staffNames].sort(
+      (left, right) => schedule.totals[left] - schedule.totals[right],
+    );
+
+    for (const lowStaff of staffByTotal) {
+      for (const highStaff of [...staffByTotal].reverse()) {
+        if (schedule.totals[highStaff] <= schedule.totals[lowStaff]) {
+          continue;
+        }
+
+        const move = findImprovingDutyMove(schedule, lowStaff, highStaff, options, currentScore);
+
+        if (move !== null) {
+          applyDutyMove(schedule, move, lowStaff, highStaff);
+          currentScore = scoreDutySchedule(schedule, options);
+          improved = true;
+          break;
+        }
+      }
+
+      if (improved) {
+        break;
+      }
+    }
+  }
+}
+
+function findImprovingDutyMove(schedule, lowStaff, highStaff, options, currentScore) {
+  for (const row of shuffle(schedule.rows)) {
+    for (const dayIndex of shuffle(DAYS.map((day, index) => index))) {
+      if (row.assignments[dayIndex] !== highStaff) {
+        continue;
+      }
+
+      if (hasDutyConflict(schedule, lowStaff, dayIndex, row.timeKey)) {
+        continue;
+      }
+
+      row.assignments[dayIndex] = lowStaff;
+      schedule.totals[lowStaff] += row.duration;
+      schedule.totals[highStaff] -= row.duration;
+
+      const newScore = scoreDutySchedule(schedule, options);
+
+      row.assignments[dayIndex] = highStaff;
+      schedule.totals[lowStaff] -= row.duration;
+      schedule.totals[highStaff] += row.duration;
+
+      if (newScore < currentScore) {
+        return { row, dayIndex, duration: row.duration };
+      }
+    }
+  }
+
+  return null;
+}
+
+function applyDutyMove(schedule, move, lowStaff, highStaff) {
+  move.row.assignments[move.dayIndex] = lowStaff;
+  schedule.totals[lowStaff] += move.duration;
+  schedule.totals[highStaff] -= move.duration;
+}
+
+function hasDutyConflict(schedule, staff, dayIndex, timeKey) {
+  return schedule.rows.some(
+    (row) => row.timeKey === timeKey && row.assignments[dayIndex] === staff,
+  );
 }
 
 function createSegmentSpecs() {
@@ -569,6 +975,101 @@ function renderTotals(totals) {
     `;
     totalsElement.append(pill);
   });
+}
+
+function renderEmptyDutyTable() {
+  const emptySchedule = {
+    rows: DUTY_ROWS.map((row) => ({
+      ...row,
+      assignments: Array.from({ length: DAYS.length }, () => null),
+    })),
+  };
+
+  renderDutySchedule(emptySchedule);
+}
+
+function renderDutySchedule(schedule) {
+  dutyBody.innerHTML = "";
+
+  schedule.rows.forEach((row) => {
+    const tableRow = document.createElement("tr");
+    tableRow.append(createHeaderCell(row.time));
+    tableRow.append(createDutyNameCell(row));
+    tableRow.append(createDurationCell(row.duration));
+
+    row.assignments.forEach((staff) => {
+      const cell = document.createElement("td");
+      cell.className = "day-cell";
+      cell.append(renderDutyStaffCell(staff));
+      tableRow.append(cell);
+    });
+
+    dutyBody.append(tableRow);
+  });
+}
+
+function createDutyNameCell(row) {
+  const cell = document.createElement("td");
+  cell.className = "block-label";
+  cell.textContent = `${row.group}: ${row.duty}`;
+  return cell;
+}
+
+function createDurationCell(duration) {
+  const cell = document.createElement("td");
+  cell.className = "duration-cell";
+  cell.textContent = duration;
+  return cell;
+}
+
+function renderDutyStaffCell(staff) {
+  if (staff === null) {
+    const empty = document.createElement("span");
+    empty.className = "empty-cell";
+    empty.textContent = "";
+    empty.setAttribute("aria-label", "No duty assigned");
+    return empty;
+  }
+
+  const chip = document.createElement("span");
+  chip.className = "duty-chip";
+  chip.textContent = staff;
+  return chip;
+}
+
+function renderDutyTotals(totals, staffNames) {
+  dutyTotalsElement.innerHTML = "";
+
+  staffNames.forEach((staff) => {
+    const total = totals[staff] || 0;
+    const pill = document.createElement("span");
+    pill.className = "staff-total";
+
+    if (total > DUTY_TARGET_MINUTES) {
+      pill.classList.add("over-target");
+    } else if (total < DUTY_TARGET_MINUTES) {
+      pill.classList.add("under-target");
+    }
+
+    pill.innerHTML = `<span>${staff}</span><strong>${total} min</strong>`;
+    dutyTotalsElement.append(pill);
+  });
+}
+
+function createDutyStatus(schedule, consistent) {
+  const totals = Object.values(schedule.totals);
+  const minTotal = Math.min(...totals);
+  const maxTotal = Math.max(...totals);
+  const averageText = schedule.averageMinutes.toFixed(1);
+  const targetNote =
+    schedule.averageMinutes > DUTY_TARGET_MINUTES
+      ? `The minimum possible average is ${averageText} minutes, so some staff must exceed 80.`
+      : "The target is 80 minutes per staff member.";
+  const consistencyNote = consistent
+    ? " Consistency was prioritized where it did not break coverage or balance."
+    : "";
+
+  return `Duty schedule generated. Totals range ${minTotal}-${maxTotal} minutes. ${targetNote}${consistencyNote}`;
 }
 
 function shuffle(items) {

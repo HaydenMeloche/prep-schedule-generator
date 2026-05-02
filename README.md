@@ -13,6 +13,11 @@ Turn on **Consistent daily order** when you want each class to keep the same
 morning/afternoon route position each day. The block lengths still vary between
 40 and 60 minutes so every teacher lands on exactly 240 minutes for the week.
 
+The page also includes a supervision duty generator. Choose 1-34 staff and
+click **Generate Duty Schedule**. Staff are named automatically as `Staff 1`,
+`Staff 2`, and so on. At least 6 staff are required because some duty windows
+have 6 simultaneous locations.
+
 ## GitHub Pages
 
 This project can be hosted directly from GitHub Pages with no build step:
@@ -30,3 +35,7 @@ This project can be hosted directly from GitHub Pages with no build step:
 - Only one class can be covered by the prep teacher in a 20-minute slot.
 - Prep is scheduled only in the morning and afternoon blocks.
 - Nutrition breaks and the 11:35-1:15 middle block never receive prep.
+- Duty scheduling uses an 80-minute weekly target per staff member.
+- If the selected staff count makes exactly 80 minutes impossible, duty totals
+  are balanced as closely as possible.
+- Back bus is treated as 3:35-3:50.

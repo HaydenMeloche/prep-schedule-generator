@@ -225,6 +225,7 @@ button:focus-visible {
 }
 
 .table-section {
+  margin-top: 18px;
   overflow: hidden;
   border-radius: 34px;
 }
@@ -264,6 +265,81 @@ button:focus-visible {
   height: 10px;
   border-radius: 50%;
   background: var(--teacher-color);
+}
+
+.duty-heading {
+  align-items: stretch;
+}
+
+.duty-controls {
+  display: grid;
+  width: min(100%, 340px);
+  gap: 12px;
+  align-self: start;
+}
+
+.number-control {
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.number-control input {
+  min-height: 46px;
+  width: 100%;
+  border: 1px solid rgba(32, 35, 29, 0.16);
+  border-radius: 14px;
+  padding: 8px 12px;
+  color: var(--ink);
+  background: rgba(255, 250, 240, 0.78);
+}
+
+.number-control input:focus-visible {
+  outline: 4px solid rgba(229, 184, 75, 0.76);
+  outline-offset: 2px;
+}
+
+.compact-toggle {
+  padding: 10px;
+}
+
+.duty-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+  gap: 8px;
+  padding: 18px clamp(18px, 3vw, 38px);
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 250, 240, 0.38);
+}
+
+.duty-totals:empty {
+  display: none;
+}
+
+.staff-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(32, 35, 29, 0.1);
+  border-radius: 12px;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: rgba(255, 250, 240, 0.72);
+}
+
+.staff-total.over-target {
+  color: var(--clay-dark);
+  background: rgba(201, 83, 47, 0.1);
+}
+
+.staff-total.under-target {
+  color: var(--sage);
 }
 
 .table-wrap {
@@ -357,6 +433,29 @@ td.day-cell {
   white-space: nowrap;
 }
 
+.duty-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(32, 35, 29, 0.1);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  background: rgba(229, 184, 75, 0.28);
+  white-space: nowrap;
+}
+
+.duration-cell {
+  width: 70px;
+  color: var(--muted);
+  font-weight: 800;
+  text-align: center;
+}
+
 .empty-cell {
   color: rgba(32, 35, 29, 0.28);
   font-weight: 700;
@@ -387,6 +486,11 @@ td.day-cell {
 
   .section-heading {
     display: block;
+  }
+
+  .duty-controls {
+    width: 100%;
+    margin-top: 20px;
   }
 
   .totals {

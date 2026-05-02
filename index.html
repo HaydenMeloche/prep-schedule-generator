@@ -71,6 +71,64 @@
           </table>
         </div>
       </section>
+
+      <section class="table-section duty-section" aria-labelledby="duty-title">
+        <div class="section-heading duty-heading">
+          <div>
+            <p class="eyebrow">Duty schedule</p>
+            <h2 id="duty-title">Supervision generator</h2>
+            <p class="route-note">
+              Builds a five-day duty schedule with an 80-minute weekly target
+              per staff member. If 80 minutes is not mathematically possible,
+              the generator balances totals as closely as it can.
+            </p>
+          </div>
+
+          <div class="duty-controls" aria-label="Duty schedule controls">
+            <label class="number-control" for="staff-count">
+              <span>Number of staff</span>
+              <input id="staff-count" type="number" min="1" max="34" value="34">
+            </label>
+
+            <label class="option-toggle compact-toggle" for="duty-consistent-toggle">
+              <input id="duty-consistent-toggle" type="checkbox" checked>
+              <span>
+                <strong>Consistent if possible</strong>
+                <small>Prefer the same staff on the same duty across days.</small>
+              </span>
+            </label>
+
+            <button id="generate-duty-button" type="button">Generate Duty Schedule</button>
+            <p id="duty-status" class="status" role="status" aria-live="polite">
+              Choose staff count, then generate.
+            </p>
+          </div>
+        </div>
+
+        <div id="duty-totals" class="duty-totals" aria-label="Staff duty totals"></div>
+
+        <div class="table-wrap">
+          <table id="duty-table">
+            <caption>
+              Staff names are generated automatically. Dismissal Back bus is
+              treated as 3:35-3:50 based on the 15-minute assumption.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Duty</th>
+                <th scope="col">Min</th>
+                <th scope="col">Day 1</th>
+                <th scope="col">Day 2</th>
+                <th scope="col">Day 3</th>
+                <th scope="col">Day 4</th>
+                <th scope="col">Day 5</th>
+              </tr>
+            </thead>
+            <tbody id="duty-body"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <script src="./script.js"></script>
