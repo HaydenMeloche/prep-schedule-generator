@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prep Schedule Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Elementary timetable tool</p>
+          <h1 id="page-title">Prep schedule generator</h1>
+          <p class="intro">
+            Generate a five-day route for the prep teacher. Each filled cell
+            tells the prep teacher which class to cover while that classroom
+            teacher is on prep. Every class gets prep at least once each day.
+          </p>
+        </div>
+        <div class="action-panel">
+          <button id="generate-button" type="button">Generate Prep Teacher Route</button>
+          <p id="status" class="status" role="status" aria-live="polite">
+            Click generate to show where the prep teacher goes all week.
+          </p>
+        </div>
+      </section>
+
+      <section class="table-section" aria-labelledby="schedule-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Five-day route</p>
+            <h2 id="schedule-title">Where the prep teacher goes</h2>
+            <p class="route-note">
+              Read a colored cell as "prep teacher covers this class now."
+              Each class appears once per day; empty cells mean the prep
+              teacher is not covering a class.
+            </p>
+          </div>
+          <div id="totals" class="totals" aria-label="Classroom teacher prep totals"></div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="schedule-table">
+            <caption>
+              Filled cells show the prep teacher destination for that 20-minute
+              slot. Break and middle-block rows never receive prep coverage.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Block</th>
+                <th scope="col">Day 1</th>
+                <th scope="col">Day 2</th>
+                <th scope="col">Day 3</th>
+                <th scope="col">Day 4</th>
+                <th scope="col">Day 5</th>
+              </tr>
+            </thead>
+            <tbody id="schedule-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
