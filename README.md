@@ -9,6 +9,10 @@ Open `index.html` in a browser, then click **Generate Prep Teacher Route**.
 Each filled cell tells the prep teacher which class to cover at that time.
 Every class gets at least one prep block each day.
 
+Turn on **Consistent daily order** when you want each class to keep the same
+morning/afternoon route position each day. The block lengths still vary between
+40 and 60 minutes so every teacher lands on exactly 240 minutes for the week.
+
 ## GitHub Pages
 
 This project can be hosted directly from GitHub Pages with no build step:

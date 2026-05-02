@@ -40,6 +40,7 @@ const TIME_ROWS = [
 let scheduleBody;
 let totalsElement;
 let statusElement;
+let consistentToggle;
 
 if (typeof document !== "undefined") {
   initializePage();
@@ -56,10 +57,12 @@ function initializePage() {
   scheduleBody = document.querySelector("#schedule-body");
   totalsElement = document.querySelector("#totals");
   statusElement = document.querySelector("#status");
+  consistentToggle = document.querySelector("#consistent-toggle");
 
   document.querySelector("#generate-button").addEventListener("click", () => {
     try {
-      const schedule = generateSchedule();
+      const consistentDaily = consistentToggle.checked;
+      const schedule = generateSchedule({ consistentDaily });
       const validation = validateSchedule(schedule);
 
       if (!validation.valid) {
@@ -69,7 +72,9 @@ function initializePage() {
       renderSchedule(schedule);
       renderTotals(validation.totals);
       statusElement.textContent =
-        "Prep teacher route generated. Each class has one prep block every day.";
+        consistentDaily
+          ? "Consistent route generated. Each class keeps the same daily order and gets prep every day."
+          : "Prep teacher route generated. Each class has one prep block every day.";
     } catch (error) {
       statusElement.textContent = `Unable to generate a valid schedule: ${error.message}`;
     }
@@ -79,7 +84,11 @@ function initializePage() {
   renderTotals(Object.fromEntries(TEACHERS.map((teacher) => [teacher, 0])));
 }
 
-function generateSchedule() {
+function generateSchedule(options = {}) {
+  if (options.consistentDaily) {
+    return generateConsistentSchedule();
+  }
+
   for (let attempt = 0; attempt < 150; attempt += 1) {
     const specs = createSegmentSpecs();
     const remaining = Object.fromEntries(
@@ -94,6 +103,115 @@ function generateSchedule() {
   }
 
   throw new Error("the solver exhausted its attempts");
+}
+
+function generateConsistentSchedule() {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    const positionTeachers = shuffle(TEACHERS);
+    const positionLengths = createConsistentPositionLengths();
+
+    if (positionLengths === null) {
+      continue;
+    }
+
+    const schedule = DAYS.map((day, dayIndex) => ({
+      morning: placeConsistentSegment([
+        {
+          teacher: positionTeachers[0],
+          length: positionLengths[0][dayIndex],
+        },
+        {
+          teacher: positionTeachers[1],
+          length: positionLengths[1][dayIndex],
+        },
+      ]),
+      afternoon: placeConsistentSegment([
+        {
+          teacher: positionTeachers[2],
+          length: positionLengths[2][dayIndex],
+        },
+        {
+          teacher: positionTeachers[3],
+          length: positionLengths[3][dayIndex],
+        },
+      ]),
+    }));
+
+    if (validateSchedule(schedule).valid) {
+      return schedule;
+    }
+  }
+
+  throw new Error("the consistent solver exhausted its attempts");
+}
+
+function createConsistentPositionLengths() {
+  const lengths = Array.from({ length: TEACHERS.length }, () =>
+    Array.from({ length: DAYS.length }, () => 2),
+  );
+
+  if (assignLongBlocksToPosition(0, lengths)) {
+    return lengths;
+  }
+
+  return null;
+}
+
+function assignLongBlocksToPosition(positionIndex, lengths) {
+  if (positionIndex === TEACHERS.length) {
+    return true;
+  }
+
+  for (const daysWithLongBlocks of shuffle(getTwoDayCombinations())) {
+    if (daysWithLongBlocks.some((dayIndex) => hasPeriodConflict(positionIndex, dayIndex, lengths))) {
+      continue;
+    }
+
+    daysWithLongBlocks.forEach((dayIndex) => {
+      lengths[positionIndex][dayIndex] = 3;
+    });
+
+    if (assignLongBlocksToPosition(positionIndex + 1, lengths)) {
+      return true;
+    }
+
+    daysWithLongBlocks.forEach((dayIndex) => {
+      lengths[positionIndex][dayIndex] = 2;
+    });
+  }
+
+  return false;
+}
+
+function getTwoDayCombinations() {
+  const combinations = [];
+
+  for (let firstDay = 0; firstDay < DAYS.length - 1; firstDay += 1) {
+    for (let secondDay = firstDay + 1; secondDay < DAYS.length; secondDay += 1) {
+      combinations.push([firstDay, secondDay]);
+    }
+  }
+
+  return combinations;
+}
+
+function hasPeriodConflict(positionIndex, dayIndex, lengths) {
+  const siblingPosition = positionIndex % 2 === 0 ? positionIndex + 1 : positionIndex - 1;
+  return lengths[siblingPosition][dayIndex] === 3;
+}
+
+function placeConsistentSegment(blocks) {
+  const slots = [];
+
+  blocks.forEach((block) => {
+    pushBlock(slots, block);
+  });
+
+  while (slots.length < 5) {
+    slots.push(null);
+  }
+
+  return slots;
 }
 
 function createSegmentSpecs() {

@@ -152,6 +152,42 @@ h2 {
     rgba(255, 250, 240, 0.6);
 }
 
+.option-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(32, 35, 29, 0.12);
+  border-radius: 18px;
+  color: var(--ink);
+  cursor: pointer;
+  background: rgba(255, 250, 240, 0.62);
+}
+
+.option-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--clay);
+}
+
+.option-toggle strong,
+.option-toggle small {
+  display: block;
+}
+
+.option-toggle strong {
+  font-size: 0.92rem;
+}
+
+.option-toggle small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 button {
   width: 100%;
   min-height: 50px;
